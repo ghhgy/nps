@@ -1,0 +1,51 @@
+name: Sync NPS Releases
+
+on:
+  schedule:
+    - cron: '0 1 * * *'   # 每天 1:00 自动检查更新
+  workflow_dispatch:       # 允许手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get latest release info from upstream
+        id: get_release
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/yisier/nps/releases/latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse release info and download assets
+        run: |
+          release_data='${{ steps.get_release.outputs.data }}'
+          tag=$(echo "$release_data" | jq -r '.tag_name')
+          name=$(echo "$release_data" | jq -r '.name')
+          body=$(echo "$release_data" | jq -r '.body // "同步自 yisier/nps"')
+
+          echo "RELEASE_TAG=$tag" >> $GITHUB_ENV
+          echo "RELEASE_NAME=$name" >> $GITHUB_ENV
+          echo "RELEASE_BODY<<EOF" >> $GITHUB_ENV
+          echo "$body" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          mkdir release-assets
+          cd release-assets
+
+          echo "$release_data" | jq -r '.assets[].browser_download_url' > urls.txt
+          while read -r url; do
+            echo "Downloading $url"
+            curl -L -O -J "$url"
+          done < urls.txt
+
+      - name: Upload to current repo as release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          body: ${{ env.RELEASE_BODY }}
+          artifacts: "release-assets/*"
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
