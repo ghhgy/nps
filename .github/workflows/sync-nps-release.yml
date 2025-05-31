@@ -40,12 +40,17 @@ jobs:
             curl -L -O -J "$url"
           done < urls.txt
 
+      - name: Compress all downloaded assets into a zip
+        run: |
+          cd release-assets
+          zip -r ../nps_release_${{ env.RELEASE_TAG }}.zip ./*
+
       - name: Upload to current repo as release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.RELEASE_TAG }}
           name: ${{ env.RELEASE_NAME }}
           body: ${{ env.RELEASE_BODY }}
-          artifacts: "release-assets/*"
+          artifacts: "nps_release_${{ env.RELEASE_TAG }}.zip"
           allowUpdates: true
           token: ${{ secrets.GITHUB_TOKEN }}
